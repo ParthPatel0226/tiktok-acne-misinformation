@@ -1,0 +1,209 @@
+{
+  "name": "TikTok Acne Research Scraper v8",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/clockworks~free-tiktok-scraper/runs?token=YOUR_APIFY_TOKEN&memory=1024&timeout=300",
+        "authentication": "none",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"hashtags\": [\n    \"acne\",\n    \"acnetreatment\",\n    \"acnetransformation\",\n    \"acneclearingskin\",\n    \"dermtok\",\n    \"skincare\",\n    \"acneroutine\",\n    \"beforeandafter\",\n    \"skintransformation\",\n    \"acnehacks\",\n    \"hormonalacne\",\n    \"breakout\"\n  ],\n  \"resultsPerPage\": 10,\n  \"shouldDownloadVideos\": false,\n  \"shouldDownloadCovers\": false,\n  \"shouldDownloadSubtitles\": false\n}",
+        "options": {}
+      },
+      "id": "start-apify-run",
+      "name": "Start Apify Run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "amount": 60,
+        "unit": "seconds"
+      },
+      "id": "wait-initial",
+      "name": "Wait 60s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [680, 300],
+      "webhookId": "wait-node-initial"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.apify.com/v2/acts/clockworks~free-tiktok-scraper/runs/{{ $('Start Apify Run').item.json.data.id }}?token=YOUR_APIFY_TOKEN",
+        "authentication": "none",
+        "options": {}
+      },
+      "id": "check-status",
+      "name": "Check Run Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "status-check",
+              "leftValue": "={{ $json.data.status }}",
+              "rightValue": "SUCCEEDED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "is-succeeded",
+      "name": "Is Succeeded?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "amount": 30,
+        "unit": "seconds"
+      },
+      "id": "wait-retry",
+      "name": "Wait 30s Retry",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1120, 480],
+      "webhookId": "wait-node-retry"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.apify.com/v2/acts/clockworks~free-tiktok-scraper/runs/{{ $('Start Apify Run').item.json.data.id }}/dataset/items?format=json&token=YOUR_APIFY_TOKEN",
+        "authentication": "none",
+        "options": {}
+      },
+      "id": "fetch-results",
+      "name": "Fetch Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fetch Results returns the array directly as the response body\nconst rawData = $input.first().json;\n\n// Handle both: direct array response OR wrapped response\nlet videos = [];\nif (Array.isArray(rawData)) {\n  videos = rawData;\n} else if (Array.isArray(rawData.items)) {\n  videos = rawData.items;\n} else {\n  // Try to find any array in the response\n  for (const key of Object.keys(rawData)) {\n    if (Array.isArray(rawData[key])) {\n      videos = rawData[key];\n      break;\n    }\n  }\n}\n\nif (videos.length === 0) {\n  throw new Error('No videos found in Apify response. Raw response: ' + JSON.stringify(rawData).substring(0, 500));\n}\n\nconst results = videos.map(video => ({\n  json: {\n    video_id: video.id || video.videoId || '',\n    hashtag: Array.isArray(video.hashtags) ? video.hashtags.join(', ') : (video.hashtag || ''),\n    caption: video.text || video.description || '',\n    likes: video.diggCount || video.likeCount || 0,\n    views: video.playCount || video.viewCount || 0,\n    shares: video.shareCount || 0,\n    comments: video.commentCount || 0,\n    engagement_rate: (video.playCount || video.viewCount || 0) > 0\n      ? (((video.diggCount || video.likeCount || 0) / (video.playCount || video.viewCount)) * 100).toFixed(2)\n      : '0',\n    creator_username: video.authorMeta?.name || video.author?.uniqueId || video.authorUniqueId || '',\n    creator_followers: video.authorMeta?.fans || video.author?.followerCount || 0,\n    creator_verified: video.authorMeta?.verified || video.author?.verified || false,\n    video_url: video.webVideoUrl || video.videoUrl || `https://www.tiktok.com/@${video.authorMeta?.name}/video/${video.id}` || '',\n    posted_date: video.createTimeISO || (video.createTime ? new Date(video.createTime * 1000).toISOString() : '') || '',\n    duration_seconds: video.videoMeta?.duration || video.video?.duration || 0,\n    creator_type: '',\n    claim_type: '',\n    before_after: '',\n    claim_accuracy: '',\n    label_confidence: '',\n    notes: ''\n  }\n}));\n\nreturn results;"
+      },
+      "id": "transform-data",
+      "name": "Transform Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "video_id": "={{ $json.video_id }}",
+            "hashtag": "={{ $json.hashtag }}",
+            "caption": "={{ $json.caption }}",
+            "likes": "={{ $json.likes }}",
+            "views": "={{ $json.views }}",
+            "shares": "={{ $json.shares }}",
+            "comments": "={{ $json.comments }}",
+            "engagement_rate": "={{ $json.engagement_rate }}",
+            "creator_username": "={{ $json.creator_username }}",
+            "creator_followers": "={{ $json.creator_followers }}",
+            "creator_verified": "={{ $json.creator_verified }}",
+            "video_url": "={{ $json.video_url }}",
+            "posted_date": "={{ $json.posted_date }}",
+            "duration_seconds": "={{ $json.duration_seconds }}",
+            "creator_type": "={{ $json.creator_type }}",
+            "claim_type": "={{ $json.claim_type }}",
+            "before_after": "={{ $json.before_after }}",
+            "claim_accuracy": "={{ $json.claim_accuracy }}",
+            "label_confidence": "={{ $json.label_confidence }}",
+            "notes": "={{ $json.notes }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "google-sheets",
+      "name": "Save to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1780, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [{ "node": "Start Apify Run", "type": "main", "index": 0 }]
+      ]
+    },
+    "Start Apify Run": {
+      "main": [
+        [{ "node": "Wait 60s", "type": "main", "index": 0 }]
+      ]
+    },
+    "Wait 60s": {
+      "main": [
+        [{ "node": "Check Run Status", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check Run Status": {
+      "main": [
+        [{ "node": "Is Succeeded?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is Succeeded?": {
+      "main": [
+        [{ "node": "Fetch Results", "type": "main", "index": 0 }],
+        [{ "node": "Wait 30s Retry", "type": "main", "index": 0 }]
+      ]
+    },
+    "Wait 30s Retry": {
+      "main": [
+        [{ "node": "Check Run Status", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Results": {
+      "main": [
+        [{ "node": "Transform Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Transform Data": {
+      "main": [
+        [{ "node": "Save to Google Sheets", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

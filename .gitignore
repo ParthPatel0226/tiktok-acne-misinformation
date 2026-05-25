@@ -1,0 +1,44 @@
+# ─── Large media / binary blobs ─────────────────────────────────────────
+videos/
+data/*.m4a
+data/Misc/cookies.txt
+data/Misc/tiktok_cookies.txt
+data/Misc/qbukold_progress.db
+
+# ─── Secrets ────────────────────────────────────────────────────────────
+.env
+.env.*
+*.key
+*_secret*
+*api_key*
+cookies.txt
+
+# ─── Python ─────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# ─── ML / data artifacts (keep small results, drop huge ones) ───────────
+*.pkl
+*.h5
+*.parquet
+data/Misc/ckpt_*.csv
+data/Misc/*.ckpt
+data/Misc/*.checkpoint
+data/Misc/test_transcribed*
+
+# ─── OS / editor ────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+desktop.ini
+
+# ─── Claude tooling ─────────────────────────────────────────────────────
+.claude/
